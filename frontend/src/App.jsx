@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import axios from 'axios';
-import { Shield, AlertTriangle, Check, Copy, Terminal, Loader2, Lock, Eye } from 'lucide-react';
+import { Shield, AlertTriangle, Check, Copy, Terminal, Loader2, Lock, Eye, Server } from 'lucide-react';
 
 function App() {
     const [requirement, setRequirement] = useState('');
     const [loading, setLoading] = useState(false);
-    const [testCases, setTestCases] = useState(null);
+    const [testCases, setTestCases] = useState([]);
     const [error, setError] = useState(null);
     const [copiedId, setCopiedId] = useState(null);
 
@@ -14,12 +14,17 @@ function App() {
 
         setLoading(true);
         setError(null);
-        setTestCases(null);
+        setTestCases([]);
 
         try {
             const response = await axios.post('/api/generate-cases', { requirement });
-            // Expecting structure: { test_cases: { sql_injection: [], bola: [] } }
-            setTestCases(response.data.test_cases);
+            // Backend now returns an array directly: [{ id, type, test_scenario, payload, expected_result }]
+            if (Array.isArray(response.data)) {
+                setTestCases(response.data);
+            } else {
+                // Fallback if it's wrapped
+                setTestCases(response.data.test_cases || []);
+            }
         } catch (err) {
             console.error(err);
             setError(err.response?.data?.error || 'Failed to generate test cases. Please ensure the backend is running.');
@@ -34,36 +39,43 @@ function App() {
         setTimeout(() => setCopiedId(null), 2000);
     };
 
-    const renderTestCaseCard = (tc, type) => {
-        const isSQLi = type === 'SQLi';
-        const badgeColor = isSQLi
-            ? 'bg-rose-500/10 text-rose-500 border-rose-500/20'
-            : 'bg-orange-500/10 text-orange-500 border-orange-500/20';
+    const renderTestCaseCard = (tc) => {
+        const typeUpper = (tc.type || '').toUpperCase();
+        const isSQLi = typeUpper.includes('SQL');
+        const isAuth = typeUpper.includes('BOLA') || typeUpper.includes('AUTH');
 
-        const icon = isSQLi ? <Terminal className="w-4 h-4" /> : <Lock className="w-4 h-4" />;
-        const uniqueId = tc.test_case_id || Math.random().toString();
+        let badgeColor = 'bg-slate-500/10 text-slate-500 border-slate-500/20';
+        let icon = <Server className="w-4 h-4" />;
+
+        if (isSQLi) {
+            badgeColor = 'bg-rose-500/10 text-rose-500 border-rose-500/20';
+            icon = <Terminal className="w-4 h-4" />;
+        } else if (isAuth) {
+            badgeColor = 'bg-orange-500/10 text-orange-500 border-orange-500/20';
+            icon = <Lock className="w-4 h-4" />;
+        }
+
+        const uniqueId = tc.id || Math.random().toString();
 
         return (
-            <div key={uniqueId} className="bg-slate-800 rounded-xl border border-slate-700 p-5 hover:border-emerald-500/30 transition-all duration-300 shadow-lg shadow-black/20 group">
+            <div key={uniqueId} className="bg-slate-800 rounded-xl border border-slate-700 p-5 hover:border-emerald-500/30 transition-all duration-300 shadow-lg shadow-black/20 group animate-in fade-in slide-in-from-bottom-3">
                 <div className="flex justify-between items-start mb-3">
                     <div className={`flex items-center gap-2 px-2.5 py-1 rounded-md text-xs font-semibold border ${badgeColor}`}>
                         {icon}
-                        <span>{type} Risk</span>
+                        <span>{tc.type}</span>
                     </div>
-                    <span className="text-slate-500 text-xs font-mono">{tc.test_case_id}</span>
+                    <span className="text-slate-500 text-xs font-mono">{tc.id}</span>
                 </div>
 
                 <h3 className="text-slate-100 font-semibold text-lg mb-2 group-hover:text-emerald-400 transition-colors">
-                    {tc.title}
+                    {tc.test_scenario}
                 </h3>
-                <p className="text-slate-400 text-sm mb-4 leading-relaxed">
-                    {tc.description}
-                </p>
 
-                <div className="space-y-3">
+                <div className="space-y-3 mt-4">
+                    {/* Payload Section */}
                     <div>
                         <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1.5 flex items-center justify-between">
-                            <span>Payload</span>
+                            <span>Attack Payload</span>
                         </div>
                         <div className="bg-slate-950 rounded-lg border border-slate-700/50 p-3 relative group/payload">
                             <code className="text-emerald-400 font-mono text-sm break-all pr-8 block">
@@ -83,6 +95,7 @@ function App() {
                         </div>
                     </div>
 
+                    {/* Expected Result Section */}
                     <div className="bg-slate-900/50 rounded-lg p-3 border border-slate-700/30">
                         <span className="text-xs text-slate-500 uppercase font-bold tracking-wider block mb-1">
                             Expected Result
@@ -118,7 +131,7 @@ function App() {
 
                     {/* Input Section */}
                     <div className="lg:col-span-4 space-y-6">
-                        <div className="bg-slate-800 rounded-2xl p-6 border border-slate-700 shadow-xl shadow-black/20">
+                        <div className="bg-slate-800 rounded-2xl p-6 border border-slate-700 shadow-xl shadow-black/20 sticky top-24">
                             <label className="block text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
                                 <Eye className="w-4 h-4 text-emerald-500" />
                                 Target Analysis
@@ -139,7 +152,7 @@ function App() {
                                     {loading ? (
                                         <>
                                             <Loader2 className="w-5 h-5 animate-spin" />
-                                            Scanning...
+                                            Scanning Models...
                                         </>
                                     ) : (
                                         <>
@@ -149,7 +162,7 @@ function App() {
                                     )}
                                 </button>
                                 <p className="text-xs text-slate-500 text-center">
-                                    Powered by Google Gemini 1.5 Flash
+                                    Multi-Model Fallback: Gemini 2.0 / 1.5
                                 </p>
                             </div>
                         </div>
@@ -163,14 +176,14 @@ function App() {
                         )}
 
                         {/* Context/Help */}
-                        {!testCases && !error && (
+                        {!testCases.length && !error && (
                             <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700/50 border-dashed text-center">
                                 <div className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3 border border-slate-700">
                                     <Terminal className="w-6 h-6 text-slate-500" />
                                 </div>
                                 <h3 className="text-slate-300 font-medium mb-1">Ready to Scan</h3>
                                 <p className="text-slate-500 text-sm">
-                                    Enter your requirements to generate OWASP-aligned test cases for SQL Injection and BOLA vulnerabilities.
+                                    Enter your requirements. The system will auto-retry across multiple Gemini models if rate limits are hit.
                                 </p>
                             </div>
                         )}
@@ -178,34 +191,19 @@ function App() {
 
                     {/* Results Section */}
                     <div className="lg:col-span-8">
-                        {testCases ? (
-                            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        {testCases.length > 0 ? (
+                            <div className="space-y-6">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                                        <span className="w-2 h-8 bg-emerald-500 rounded-full"></span>
+                                        Security Test Cases
+                                    </h2>
+                                    <span className="text-slate-400 text-sm">{testCases.length} generated</span>
+                                </div>
 
-                                {/* SQLi Section */}
-                                {testCases.sql_injection?.length > 0 && (
-                                    <section>
-                                        <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                                            <span className="w-2 h-8 bg-rose-500 rounded-full"></span>
-                                            SQL Injection Flaws
-                                        </h2>
-                                        <div className="grid gap-4">
-                                            {testCases.sql_injection.map(tc => renderTestCaseCard(tc, 'SQLi'))}
-                                        </div>
-                                    </section>
-                                )}
-
-                                {/* BOLA Section */}
-                                {testCases.bola?.length > 0 && (
-                                    <section>
-                                        <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                                            <span className="w-2 h-8 bg-orange-500 rounded-full"></span>
-                                            Broken Object Level Auth
-                                        </h2>
-                                        <div className="grid gap-4">
-                                            {testCases.bola.map(tc => renderTestCaseCard(tc, 'BOLA'))}
-                                        </div>
-                                    </section>
-                                )}
+                                <div className="grid gap-4">
+                                    {testCases.map((tc) => renderTestCaseCard(tc))}
+                                </div>
                             </div>
                         ) : (
                             <div className="h-full flex flex-col items-center justify-center text-slate-600 space-y-4 min-h-[400px]">
