@@ -1,7 +1,7 @@
 # AI Security Test Case Generator
 
 ## Project Overview
-A full-stack application that accepts user-defined requirements and generates comprehensive security test cases using Google Gemini 1.5 Flash.
+A full-stack application that accepts user-defined requirements and generates comprehensive security test cases using milti model strategy with gemini-2.5-flash-lite and gemini-3-flash-preview
 
 ## Structure
 - `backend/`: Python Flask API
